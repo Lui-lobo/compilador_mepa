@@ -1,0 +1,10 @@
+Arquivo contendo as referências do projeto de compilador de mepa.
+
+Grupo: 
+Luiz Henrique Carvalhas Lobo de Oliveira - RA: 2301293 - CC06
+Johnathan Silva Francisco - RA: 2301490 - CC06
+Enzo Tavares Lula Silva - RA: 2301843 - CC06
+Abner Israel Sanches de Oliveira - RA: 2300152 - CC06
+Lucas Araújo Andrade Morais - RA: 2300734 - CC06
+
+Referências utilizadas:

@@ -2,8 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 MEPA.py - Interpretador simplificado da linguagem MEPA com REPL
-Substitua o cabeçalho abaixo com os nomes dos integrantes e RAs do grupo.
-Grupo: [NOME1 - RA], [NOME2 - RA], [NOME3 - RA]
+
+Grupo: 
+Luiz Henrique Carvalhas Lobo de Oliveira - RA: 2301293 - CC06
+Johnathan Silva Francisco - RA: 2301490 - CC06
+Enzo Tavares Lula Silva - RA: 2301843 - CC06
+Abner Israel Sanches de Oliveira - RA: 2300152 - CC06
+Lucas Araújo Andrade Morais - RA: 2300734 - CC06
+
 Documento: Trabalho 03 - Interpretador MEPA
 Linguagem: Python 3.x
 """
