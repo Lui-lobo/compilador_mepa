@@ -1,0 +1,27 @@
+10 INPP
+20 AMEM 3          # aloca memória para fat(0), num(1), cont(2)
+30 CRCT 5
+40 ARMZ 1          # num := 5
+50 CRCT 1
+60 ARMZ 0          # fat := 1
+70 CRCT 2
+80 ARMZ 2          # cont := 2
+90 L1: NADA
+100 CRVL 2
+110 CRVL 1
+120 CMEG           # cont <= num
+130 DSVF L2
+140 CRVL 0
+150 CRVL 2
+160 MULT
+170 ARMZ 0         # fat := fat * cont
+180 CRVL 2
+190 CRCT 1
+200 SOMA
+210 ARMZ 2         # cont := cont + 1
+220 DSVS L1
+230 L2: NADA
+240 CRVL 0
+250 IMPR
+260 DMEM 3
+270 PARA

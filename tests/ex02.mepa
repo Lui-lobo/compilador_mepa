@@ -1,0 +1,7 @@
+10 INPP
+20 AMEM x          # ERRO: argumento não numérico
+30 CRCT cinco      # ERRO: constante inválida
+40 ARMZ 1
+50 CRVL y          # ERRO: variável não alocada
+60 SOMA
+70 PARA

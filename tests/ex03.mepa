@@ -1,0 +1,27 @@
+10 INPP
+20 AMEM 2
+30 CRCT 10
+40 ARMZ 0
+50 CRCT 5
+60 ARMZ 1
+70 CRVL 0
+80 CRVL 1
+90 CMMA           # 10 > 5 → pilha = [1]
+100 IMPR
+110 CRVL 0
+120 CRVL 1
+130 CMME           # 10 < 5 → pilha = [0]
+140 IMPR
+150 CRVL 0
+160 CRVL 1
+170 CMDG           # 10 != 5 → pilha = [1]
+180 IMPR
+190 CRVL 0
+200 CRVL 1
+210 CONJ           # 10 and 5 → pilha = [1]
+220 IMPR
+230 CRVL 0
+240 CRVL 1
+250 DISJ           # 10 or 5 → pilha = [1]
+260 IMPR
+270 PARA
