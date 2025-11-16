@@ -14,6 +14,7 @@ Documento: Trabalho 03 - Interpretador MEPA
 Linguagem: Python 3.x
 """
 
+# Importações necessárias
 from typing import List, Dict, Tuple, Optional
 import os
 import sys
@@ -21,16 +22,23 @@ import sys
 # -----------------------------
 # Helpers e tipos
 # -----------------------------
-Instruction = Tuple[int, str]  # (linha, instrução_raw)
+Instruction = Tuple[int, str]  # Define um tipo para uma instrução (linha, conteúdo)
 
 def clear_console():
-    # Não é estritamente necessário, deixar como compatível
+    """
+    Limpa o console conforme o sistema operacional.
+    Não é necessário ao funcionamento, mas deixado para compatibilidade.
+    """
     if os.name == 'nt':
         os.system('cls')
     else:
         os.system('clear')
 
 def pause():
+    """
+    Pausa a execução até que o usuário pressione Enter.
+    Usado quando o LIST mostra páginas de 20 linhas.
+    """
     try:
         input("Pressione Enter para continuar...")
     except KeyboardInterrupt:
@@ -38,21 +46,28 @@ def pause():
 
 def parse_line_header(s: str) -> Tuple[int, str]:
     """
-    Recebe uma string como "120 CRVL 2" e retorna (120, "CRVL 2").
-    Lança ValueError se o primeiro token não for inteiro não-negativo.
+    Recebe uma linha do arquivo, por ex.: "120 CRVL 2"
+    Separa o número da linha do restante do conteúdo.
+    Retorna (120, "CRVL 2").
     """
     s = s.strip()
     if not s:
         raise ValueError("Linha vazia")
-    parts = s.split(None, 1)
+
+    parts = s.split(None, 1)  # divide apenas em dois tokens: número e resto
+
     if len(parts) == 0:
         raise ValueError("Linha inválida")
+
+    # Primeiro token deve ser um número
     try:
         numero = int(parts[0])
     except Exception:
         raise ValueError("Número de linha inválido")
+
     if numero < 0:
         raise ValueError("Número de linha não pode ser negativo")
+
     rest = parts[1] if len(parts) > 1 else ""
     return numero, rest.strip()
 
@@ -61,45 +76,65 @@ def parse_line_header(s: str) -> Tuple[int, str]:
 # -----------------------------
 class SourceBuffer:
     """
-    Mantém as linhas carregadas em memória, com ordenação por número de linha.
+    Classe responsável por armazenar o código MEPA carregado.
+    Permite inserir, deletar, listar e salvar linhas numeradas.
     """
+
     def __init__(self):
-        self.lines: Dict[int, str] = {}  # linha -> conteúdo (instrução raw)
+        # Dicionário: número_da_linha -> instrução_raw
+        self.lines: Dict[int, str] = {}
         self.filename: Optional[str] = None
-        self.modified: bool = False
+        self.modified: bool = False  # indica se houve alterações após o load
 
     def load_file(self, path: str) -> None:
+        """
+        Carrega um arquivo .mepa para a memória.
+        Faz parsing de cada linha usando parse_line_header().
+        """
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Arquivo '{path}' não encontrado.")
+
+        # Lê todas as linhas do arquivo
         with open(path, 'r', encoding='utf-8') as f:
             content = f.readlines()
+
         self.lines.clear()
+
+        # Processa linha por linha
         for raw in content:
             raw = raw.rstrip('\n').rstrip('\r')
             if not raw.strip():
-                continue
+                continue  # ignora linhas vazias
             try:
                 num, rest = parse_line_header(raw)
             except ValueError:
-                # ignora linhas malformatadas do arquivo (ou poderia lançar)
-                continue
+                continue  # ignora linhas mal formatadas
             self.lines[num] = rest
+
         self.filename = path
         self.modified = False
 
     def save_file(self, path: Optional[str] = None) -> None:
+        """
+        Salva o conteúdo atual em um arquivo, ordenando as linhas.
+        """
         if path is None:
             if self.filename is None:
                 raise ValueError("Nenhum arquivo associado para salvar.")
             path = self.filename
-        # Escrever ordenado
+
         with open(path, 'w', encoding='utf-8') as f:
             for num in sorted(self.lines.keys()):
                 f.write(f"{num} {self.lines[num]}\n")
+
         self.filename = path
         self.modified = False
 
     def list_text(self) -> List[str]:
+        """
+        Retorna uma lista de strings: ["10 INPP", "20 AMEM 3", ...]
+        Usado pelo comando LIST.
+        """
         out = []
         for num in sorted(self.lines.keys()):
             out.append(f"{num} {self.lines[num]}")
@@ -107,19 +142,26 @@ class SourceBuffer:
 
     def insert(self, num: int, instr: str) -> Tuple[str, Optional[str]]:
         """
-        Insere ou substitui. Retorna tupla (mensagem, subtituida_ou_None)
+        Insere ou substitui uma linha.
+
+        Retorna:
+        - "Linha inserida" se nova
+        - "Linha substituída" e o conteúdo antigo, se já existia
         """
         old = self.lines.get(num)
-        if old is None:
+        if old is None:  # nova linha
             self.lines[num] = instr
             self.modified = True
             return ("Linha inserida", None)
-        else:
+        else:  # substituição
             self.lines[num] = instr
             self.modified = True
             return ("Linha substituída", old)
 
     def delete(self, num: int) -> str:
+        """
+        Remove uma linha específica.
+        """
         if num in self.lines:
             removed = self.lines.pop(num)
             self.modified = True
@@ -127,14 +169,21 @@ class SourceBuffer:
         raise KeyError("Linha inexistente")
 
     def delete_range(self, a: int, b: int) -> List[Tuple[int, str]]:
+        """
+        Remove várias linhas no intervalo [a, b].
+        """
         if a > b:
             raise ValueError("Intervalo inválido")
+
         removed = []
+
         for num in sorted(list(self.lines.keys())):
             if a <= num <= b:
                 removed.append((num, self.lines.pop(num)))
+
         if removed:
             self.modified = True
+
         return removed
 
 # -----------------------------
@@ -142,52 +191,69 @@ class SourceBuffer:
 # -----------------------------
 class MepaInterpreter:
     """
-    Interpretador simples da linguagem MEPA.
-    Mantém pilha (list), memória (dict de endereços inteiros), instruções e labels.
+    Classe central: executa instruções MEPA.
+    Mantém:
+    - pilha
+    - memória
+    - lista de instruções
+    - labels
+    - ponteiro de instrução (ip)
     """
+
     def __init__(self, source: SourceBuffer):
         self.src = source
-        self.stack: List[int] = []
-        self.memory: Dict[int, int] = {}  # endereço -> valor
-        self.instructions: List[Tuple[int, List[str]]] = []  # (linha, tokens)
-        self.line_to_index: Dict[int, int] = {}  # linha -> índice em instructions
-        self.labels: Dict[str, int] = {}  # label -> linha
-        self.ip: int = 0  # índice de instrução corrente (0-based)
+        self.stack: List[int] = []     # pilha de execução
+        self.memory: Dict[int, int] = {}  # memória endereçada
+        self.instructions: List[Tuple[int, List[str]]] = []  # lista de (linha, tokens)
+        self.line_to_index: Dict[int, int] = {}  # mapeia número da linha -> índice
+        self.labels: Dict[str, int] = {}  # mapeia nome do label -> linha
+        self.ip: int = 0        # instruction pointer (indice da lista instructions)
         self.running: bool = False
         self.halted: bool = False
 
     # ---------- carregamento ----------
     def prepare(self):
         """
-        Constrói a lista de instruções a partir do source buffer,
-        extrai labels e prepara map de linha->índice.
+        Constrói lista padronizada de instruções.
+        Remove comentários, extrai labels e monta o mapping linha->índice.
         """
         self.instructions.clear()
         self.line_to_index.clear()
         self.labels.clear()
+
+        # Processa cada linha na ordem crescente
         for i, num in enumerate(sorted(self.src.lines.keys())):
             raw = self.src.lines[num].strip()
-            # Ignorar comentários após '#'
+
+            # Remove comentários iniciados por '#'
             if '#' in raw:
                 raw = raw.split('#', 1)[0].strip()
+
             if not raw:
-                continue
-            # tratar label no começo do raw como "L1: NADA"
+                continue  # ignora linha vazia
+
             tokens = raw.split()
+
+            # Se o primeiro token termina com ':', é um label
             if tokens and tokens[0].endswith(':'):
                 label = tokens[0][:-1]
                 if label:
-                    self.labels[label.upper()] = num
-                    tokens = tokens[1:]
-            # guarda a instrução como lista de tokens (maiúsculo para opcode)
-            tokens = [t for t in tokens]
+                    self.labels[label.upper()] = num  # registra label → linha
+                    tokens = tokens[1:]  # remove o label para obter instrução real
+
+            # Armazena a instrução (linha, lista_tokens)
+            tokens = [t for t in tokens]  # copia
             self.instructions.append((num, tokens))
-        # montar line_to_index
+
+        # Monta o mapeamento linha -> índice da lista instructions
         for idx, (ln, tokens) in enumerate(self.instructions):
             self.line_to_index[ln] = idx
 
     # ---------- utilitários ----------
     def reset_state(self):
+        """
+        Limpa pilha, memória e posição de execução.
+        """
         self.stack = []
         self.memory = {}
         self.ip = 0
@@ -196,101 +262,129 @@ class MepaInterpreter:
 
     def _lookup_target_index(self, target: str) -> int:
         """
-        target pode ser número (string "120") ou label "L2".
-        Retorna índice (0-based) em self.instructions.
-        Lança KeyError se não encontrar.
+        Resolve destino de saltos (DSVS, DSVF).
+        target pode ser:
+        - um número de linha ("120")
+        - um label ("L1")
+
+        Retorna índice na lista self.instructions.
         """
         t = target.strip()
-        # Se for numérico
+
+        # Se for número
         try:
             ln = int(t)
         except Exception:
             ln = None
+
         if ln is not None:
             if ln in self.line_to_index:
                 return self.line_to_index[ln]
-            else:
-                raise KeyError(f"Linha alvo {ln} inexistente.")
-        else:
-            # label
-            key = t.upper()
-            if key in self.labels:
-                ln = self.labels[key]
-                return self.line_to_index[ln]
-            else:
-                raise KeyError(f"Label alvo '{t}' inexistente.")
+            raise KeyError(f"Linha alvo {ln} inexistente.")
+
+        # Se for label
+        key = t.upper()
+        if key in self.labels:
+            ln = self.labels[key]
+            return self.line_to_index[ln]
+
+        raise KeyError(f"Label alvo '{t}' inexistente.")
 
     # ---------- execução ----------
     def run_all(self) -> None:
-        """Executa até PARA ou fim das instruções."""
-        self.prepare()
-        self.reset_state()
+        """
+        Executa programa inteiro até encontrar PARA ou acabar instruções.
+        """
+        self.prepare()      # constrói instruções
+        self.reset_state()  # zera pilha e memória
         self.running = True
-        # Busca INPP obrigatória? Exemplo sugere que INPP seja a primeira instrução normalmente.
+
         while self.ip < len(self.instructions) and not self.halted:
             self.execute_step()
+
         self.running = False
 
     def execute_step(self) -> None:
-        """Executa exatamente uma instrução (usada pelo DEBUG/NEXT e pelo run)."""
+        """
+        Executa UMA instrução (para NEXT ou execução normal do run_all).
+        """
+
         if self.halted:
             return
+
+        # Se ip saiu dos limites, encerrou naturalmente
         if self.ip < 0 or self.ip >= len(self.instructions):
-            # fim natural: encerra
             self.halted = True
             return
+
+        # Obtém (número_da_linha, tokens)
         ln, tokens = self.instructions[self.ip]
+
         if not tokens:
-            # linha vazia / NADA
+            # linha vazia equivale a NADA
             self.ip += 1
             return
-        op = tokens[0].upper()
-        args = tokens[1:]
-        # executar instrução
+
+        op = tokens[0].upper()  # operação
+        args = tokens[1:]       # argumentos
+
+        # Bloco gigante com todas instruções MEPA
         try:
-            # instruções sem operandos
+            # ------- INSTRUÇÕES SEM ARGUMENTO -------
             if op == 'INPP':
-                # inicia programa principal -> geralmente reset de estruturas
-                # no exemplo, INPP é só indicativo. Aqui não precisa fazer nada específico.
-                pass
+                pass  # apenas marca início, não faz ação interna
+
             elif op == 'PARA':
+                # Finaliza execução
                 self.halted = True
+
             elif op == 'NADA':
                 pass
+
             elif op == 'IMPR':
                 if not self.stack:
                     raise RuntimeError("Pilha vazia em IMPR")
                 val = self.stack.pop()
                 print(val)
+
+            # ------- MEMÓRIA -------
             elif op == 'AMEM':
+                # Aloca m posições de memória e inicializa com zero
                 if len(args) != 1:
                     raise ValueError("AMEM precisa de 1 argumento")
                 m = int(args[0])
-                # inicializa endereços 0..m-1 se não existirem
                 for i in range(m):
                     if i not in self.memory:
                         self.memory[i] = 0
+
             elif op == 'DMEM':
+                # Remove m posições da memória
                 if len(args) != 1:
                     raise ValueError("DMEM precisa de 1 argumento")
                 m = int(args[0])
-                # desalocar: remove os endereços 0..m-1 se existirem
                 for i in range(m):
                     if i in self.memory:
                         del self.memory[i]
+
+            # ------- CRVL / ARMZ / CRCT -------
             elif op == 'CRCT':
+                # Empilha um inteiro constante
                 if len(args) != 1:
                     raise ValueError("CRCT precisa de 1 argumento")
                 k = int(args[0])
                 self.stack.append(k)
+
             elif op == 'CRVL':
+                # Carrega valor da memória e empilha
                 if len(args) != 1:
                     raise ValueError("CRVL precisa de 1 argumento")
                 n = int(args[0])
                 if n not in self.memory:
                     raise KeyError(f"Endereço {n} não alocado")
                 self.stack.append(self.memory[n])
+
             elif op == 'ARMZ':
+                # Armazena topo da pilha em memória[n]
                 if len(args) != 1:
                     raise ValueError("ARMZ precisa de 1 argumento")
                 n = int(args[0])
@@ -298,11 +392,14 @@ class MepaInterpreter:
                     raise RuntimeError("Pilha vazia em ARMZ")
                 val = self.stack.pop()
                 self.memory[n] = val
+
+            # ------- ARITMÉTICAS -------
             elif op in ('SOMA', 'SUBT', 'MULT', 'DIVI'):
                 if len(self.stack) < 2:
                     raise RuntimeError(f"Pilha com menos de 2 elementos em {op}")
                 b = self.stack.pop()
                 a = self.stack.pop()
+
                 if op == 'SOMA':
                     self.stack.append(a + b)
                 elif op == 'SUBT':
@@ -313,50 +410,58 @@ class MepaInterpreter:
                     if b == 0:
                         raise ZeroDivisionError("Divisão por zero em DIVI")
                     self.stack.append(a // b)
+
+            # ------- UNÁRIA -------
             elif op == 'INVR':
                 if not self.stack:
                     raise RuntimeError("Pilha vazia em INVR")
                 v = self.stack.pop()
                 self.stack.append(-v)
+
+            # ------- LÓGICAS -------
             elif op == 'CONJ':
                 if len(self.stack) < 2:
                     raise RuntimeError("Pilha com menos de 2 elementos em CONJ")
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(1 if (a and b) else 0)
+
             elif op == 'DISJ':
                 if len(self.stack) < 2:
                     raise RuntimeError("Pilha com menos de 2 elementos em DISJ")
                 b = self.stack.pop()
                 a = self.stack.pop()
                 self.stack.append(1 if (a or b) else 0)
+
+            # ------- COMPARAÇÕES -------
             elif op in ('CMME', 'CMMA', 'CMIG', 'CMDG', 'CMEG', 'CMAG'):
                 if len(self.stack) < 2:
                     raise RuntimeError(f"Pilha com menos de 2 elementos em {op}")
                 b = self.stack.pop()
                 a = self.stack.pop()
+
                 res = 0
-                if op == 'CMME':
-                    res = 1 if (a < b) else 0
-                elif op == 'CMMA':
-                    res = 1 if (a > b) else 0
-                elif op == 'CMIG':
-                    res = 1 if (a == b) else 0
-                elif op == 'CMDG':
-                    res = 1 if (a != b) else 0
-                elif op == 'CMEG':
-                    res = 1 if (a <= b) else 0
-                elif op == 'CMAG':
-                    res = 1 if (a >= b) else 0
+                if op == 'CMME': res = 1 if a < b else 0
+                elif op == 'CMMA': res = 1 if a > b else 0
+                elif op == 'CMIG': res = 1 if a == b else 0
+                elif op == 'CMDG': res = 1 if a != b else 0
+                elif op == 'CMEG': res = 1 if a <= b else 0
+                elif op == 'CMAG': res = 1 if a >= b else 0
+
                 self.stack.append(res)
+
+            # ------- DESVIOS -------
             elif op == 'DSVS':
+                # Desvio incondicional
                 if len(args) != 1:
                     raise ValueError("DSVS precisa de 1 argumento (endereço ou label)")
                 target = args[0]
                 idx = self._lookup_target_index(target)
                 self.ip = idx
-                return  # já atualizamos ip
+                return  # importante: evita ip += 1
+
             elif op == 'DSVF':
+                # Desvio condicional: só desvia se topo == 0
                 if len(args) != 1:
                     raise ValueError("DSVF precisa de 1 argumento (endereço ou label)")
                 if not self.stack:
@@ -367,24 +472,36 @@ class MepaInterpreter:
                     idx = self._lookup_target_index(target)
                     self.ip = idx
                     return
+
             else:
                 raise ValueError(f"Instrução desconhecida '{op}' na linha {ln}")
+
         except Exception as e:
-            # melhor tornar o erro legível e interromper execução
+            # Erros são encapsulados com o número da linha como contexto
             raise RuntimeError(f"Erro ao executar linha {ln}: {e}") from e
-        # se não fizemos jump, avançar ip normalmente
+
+        # Se não houve salto, avança para próxima instrução
         self.ip += 1
 
     # ---------- modo debug ----------
     def start_debug(self):
+        """
+        Inicia depuração:
+        - Prepara instruções
+        - Reseta estado
+        - Exibe a primeira instrução
+        """
         self.prepare()
         self.reset_state()
         self.running = True
-        # No debug, não executa nada até NEXT
+
         print("Iniciando modo de depuração:")
         self._print_current_instruction()
 
     def _print_current_instruction(self):
+        """
+        Imprime a instrução atual baseada em self.ip.
+        """
         if 0 <= self.ip < len(self.instructions):
             ln, tokens = self.instructions[self.ip]
             instr_text = " ".join(tokens) if tokens else "<vazio>"
@@ -393,9 +510,13 @@ class MepaInterpreter:
             print("<fim do programa>")
 
     def debug_next(self):
+        """
+        Executa a próxima instrução no modo DEBUG.
+        """
         if self.halted:
             print("Programa já finalizado.")
             return
+
         try:
             self._print_current_instruction()
             self.execute_step()
@@ -406,6 +527,9 @@ class MepaInterpreter:
             self.halted = True
 
     def debug_stack(self):
+        """
+        Mostra o conteúdo atual da pilha.
+        """
         if not self.stack:
             print("Conteúdo da pilha: (vazia)")
             return
@@ -414,14 +538,19 @@ class MepaInterpreter:
             print(f"{i}: {v}")
 
 # -----------------------------
-# REPL e comando handlers
+# REPL e comandos
 # -----------------------------
 def cmd_load(state: SourceBuffer, arg: str):
+    """
+    Implementação do comando LOAD.
+    Pode solicitar salvamento se houver alterações não gravadas.
+    """
     path = arg.strip()
     if not path:
         print("Uso: LOAD <ARQUIVO.MEPA>")
         return
-    # confirmar se há modificações não salvas
+
+    # Confirma salvar se houver modificações pendentes
     if state.filename and state.modified:
         resp = input(f"Arquivo atual ('{state.filename}') contém alterações não salvas.\nDeseja salvar (S/N)? ").strip().upper()
         if resp == 'S':
@@ -431,6 +560,7 @@ def cmd_load(state: SourceBuffer, arg: str):
             except Exception as e:
                 print(f"Erro ao salvar: {e}")
                 return
+
     try:
         state.load_file(path)
         print(f"Arquivo '{path}' carregado com sucesso.")
@@ -438,10 +568,14 @@ def cmd_load(state: SourceBuffer, arg: str):
         print(f"Erro ao carregar o arquivo: {e}")
 
 def cmd_list(state: SourceBuffer):
+    """
+    Lista o código em páginas de 20 linhas.
+    """
     lines = state.list_text()
     if not lines:
         print("Nenhum código carregado.")
         return
+
     page_size = 20
     for i in range(0, len(lines), page_size):
         for line in lines[i:i+page_size]:
@@ -450,21 +584,30 @@ def cmd_list(state: SourceBuffer):
             pause()
 
 def cmd_ins(state: SourceBuffer, rest: str):
+    """
+    Insere ou substitui linhas.
+    Sintaxe: INS <linha> <instrução>
+    """
     rest = rest.strip()
     if not rest:
         print("Uso: INS <LINHA> <INSTRUÇÃO>")
         return
+
     parts = rest.split(None, 1)
     if len(parts) == 0:
         print("Parâmetros inválidos.")
         return
+
     try:
         linha = int(parts[0])
     except Exception:
         print("Número de linha inválido.")
         return
+
     instr = parts[1] if len(parts) > 1 else ""
+
     msg, old = state.insert(linha, instr)
+
     if old is None:
         print("Linha inserida:")
         print(f"{linha} {instr}")
@@ -476,20 +619,28 @@ def cmd_ins(state: SourceBuffer, rest: str):
         print(f"{linha} {instr}")
 
 def cmd_del(state: SourceBuffer, rest: str):
+    """
+    Apaga uma linha ou um intervalo de linhas.
+    """
     rest = rest.strip()
     if not rest:
         print("Uso: DEL <LINHA>  ou DEL <LINHA_INI> <LINHA_FIM>")
         return
+
     parts = rest.split()
+
     try:
         if len(parts) == 1:
             ln = int(parts[0])
             removed = state.delete(ln)
             print("Linha removida:")
             print(f"{ln} {removed}")
+
         elif len(parts) == 2:
-            a = int(parts[0]); b = int(parts[1])
+            a = int(parts[0])
+            b = int(parts[1])
             removed = state.delete_range(a, b)
+
             if not removed:
                 print("Nenhuma linha no intervalo.")
             else:
@@ -498,12 +649,17 @@ def cmd_del(state: SourceBuffer, rest: str):
                     print(f"{ln} {instr}")
         else:
             print("Parâmetros inválidos para DEL")
+
     except ValueError as ve:
         print(f"Erro: {ve}")
+
     except KeyError as ke:
         print(f"Erro: {ke}")
 
 def cmd_save(state: SourceBuffer):
+    """
+    Salva o arquivo atual ou pede nome novo.
+    """
     try:
         if state.filename is None:
             path = input("Nome do arquivo para salvar: ").strip()
@@ -519,10 +675,15 @@ def cmd_save(state: SourceBuffer):
         print(f"Erro ao salvar arquivo: {e}")
 
 def cmd_run(state: SourceBuffer):
+    """
+    Executa o programa completo.
+    """
     if not state.lines:
         print("Nenhum código carregado na memória.")
         return
+
     interp = MepaInterpreter(state)
+
     try:
         interp.run_all()
         print("Execução finalizada.")
@@ -530,44 +691,60 @@ def cmd_run(state: SourceBuffer):
         print(f"Erro durante execução: {e}")
 
 def cmd_debug(state: SourceBuffer):
+    """
+    Inicia o modo de depuração interativa.
+    """
     if not state.lines:
         print("Nenhum código carregado na memória.")
         return
+
     interp = MepaInterpreter(state)
     interp.start_debug()
-    # modo interativo do depurador
+
+    # Loop de comandos do DEBUG
     while True:
         try:
             cmd = input("> ").strip().upper()
         except KeyboardInterrupt:
             print("\nDepuração interrompida.")
             break
+
         if cmd == "":
             continue
+
         if cmd == 'NEXT':
             interp.debug_next()
             if interp.halted:
                 break
+
         elif cmd == 'STACK':
             interp.debug_stack()
+
         elif cmd == 'STOP':
             print("Modo de depuração finalizado!")
             break
+
+        # comandos que fecham debug
         elif cmd in ('LOAD', 'RUN', 'INS', 'DEL', 'EXIT', 'SAVE'):
-            # comandos que interrompem depuração segundo enunciado
             print(f"Comando '{cmd}' interrompe o modo de depuração.")
-            # devolve controle indicando interrupção
             break
+
         else:
             print("Comando inválido no modo DEBUG. Use NEXT, STACK ou STOP.")
 
 # -----------------------------
-# Loop principal
+# Loop principal do REPL
 # -----------------------------
 def main():
+    """
+    Loop principal do REPL.
+    Aguarda comandos do usuário e os encaminha ao handler correto.
+    """
     state = SourceBuffer()
+
     print("MEPA Interpreter - REPL")
     print("Digite um comando. Ex.: LOAD arquivo.mepa | LIST | RUN | INS | DEL | SAVE | DEBUG | EXIT")
+
     while True:
         try:
             raw = input("> ")
@@ -577,11 +754,16 @@ def main():
         except KeyboardInterrupt:
             print("\nUse EXIT para encerrar.")
             continue
+
         if not raw:
             continue
+
         parts = raw.strip().split(None, 1)
+
         cmd = parts[0].upper()
         arg = parts[1] if len(parts) > 1 else ""
+
+        # Encaminha para o comando correspondente
         if cmd == 'LOAD':
             cmd_load(state, arg)
         elif cmd == 'LIST':
@@ -597,6 +779,7 @@ def main():
         elif cmd == 'DEBUG':
             cmd_debug(state)
         elif cmd == 'EXIT':
+            # Verifica se há alterações não salvas
             if state.modified and state.filename:
                 resp = input(f"Arquivo atual ('{state.filename}') contém alterações não salvas.\nDeseja salvar (S/N)? ").strip().upper()
                 if resp == 'S':
@@ -606,6 +789,7 @@ def main():
                     except Exception as e:
                         print(f"Erro ao salvar: {e}")
                         continue
+
             elif state.modified and state.filename is None:
                 resp = input("Existem alterações não salvas. Deseja salvar (S/N)? ").strip().upper()
                 if resp == 'S':
@@ -617,10 +801,13 @@ def main():
                         except Exception as e:
                             print(f"Erro ao salvar: {e}")
                             continue
+
             print("Fim da execução.")
             break
+
         else:
             print("Erro: comando inválido")
 
+# Ponto de entrada
 if __name__ == '__main__':
     main()
