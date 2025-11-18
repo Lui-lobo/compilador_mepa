@@ -7,4 +7,36 @@ Enzo Tavares Lula Silva - RA: 2301843 - CC06
 Abner Israel Sanches de Oliveira - RA: 2300152 - CC06
 Lucas Araújo Andrade Morais - RA: 2300734 - CC06
 
-Referências utilizadas:
+Link do video contendo a explicação e demonstração do interpretador MEPA:
+- https://youtu.be/BqFK4_n8-uk
+
+Fontes Consultadas:
+
+Livros:
+Kowaltowski, Tomasz.
+Implementação de Linguagens de Programação.
+Editora Guanabara, 1983.
+
+Material didático fornecido pelo professor da disciplina, contendo:
+especificação da MEPA simplificada,
+conjunto de instruções obrigatórias,
+exemplos de programas MEPA,
+regras do REPL e do modo DEBUG.
+
+Documentação oficial da linguagem Python 3.12
+Usada apenas para sintaxe e funções padrões:
+https://docs.python.org/
+
+Experiência prévia de compiladores / máquinas de pilha
+Conceitos utilizados:
+Máquina de execução baseada em stack machine
+Implementação de opcodes
+Ciclo de fetch–decode–execute
+Saltos condicionais e incondicionais
+Mapeamento de labels para endereços
+Execução sequencial controlada por ponteiro (ip)
+
+IAs:
+Para este projeto foi utilizado o github copilot chat para correções de códigos.
+Infelizmente o copilot ainda não contem a função de compartilhar os Chats criados por ele para demonstrações
+de perguntas realizadas ao mesmo.
